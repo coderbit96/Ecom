@@ -1,10 +1,8 @@
-import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { EmailAuthForm } from "@/components/auth/email-auth-form";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { hasFirebaseConfig } from "@/lib/firebase-config";
 
-export default function LoginPage() {
-  const googleEnabled = hasFirebaseConfig();
-
+export default function SignupPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#020617] px-6 py-10 text-white">
       <section className="w-full max-w-xl rounded-[28px] border border-slate-800 bg-[#0f172a] p-8 shadow-2xl shadow-black/30 sm:p-10">
@@ -13,11 +11,11 @@ export default function LoginPage() {
             Ecom<span className="text-cyan-300">Store</span>
           </h1>
           <p className="mt-3 text-base text-slate-400">
-            Sign in to continue shopping.
+            Sign up and continue to the store.
           </p>
         </div>
 
-        <EmailAuthForm mode="login" />
+        <EmailAuthForm mode="signup" />
 
         <div className="my-5 flex items-center gap-3">
           <div className="h-px flex-1 bg-slate-700" />
@@ -25,19 +23,7 @@ export default function LoginPage() {
           <div className="h-px flex-1 bg-slate-700" />
         </div>
 
-        <GoogleSignInButton enabled={googleEnabled} />
-
-        {!googleEnabled ? (
-          <div className="mt-4 rounded-2xl bg-slate-900 p-3 text-xs text-slate-400">
-            <p className="font-medium text-white">Google OAuth setup</p>
-            <p className="mt-1">
-              Add your Firebase web app config to the
-              <code className="mx-1">NEXT_PUBLIC_FIREBASE_*</code>
-              variables in <code>.env.local</code>, then enable Google in
-              Firebase Authentication.
-            </p>
-          </div>
-        ) : null}
+        <GoogleSignInButton enabled={hasFirebaseConfig()} />
       </section>
     </main>
   );

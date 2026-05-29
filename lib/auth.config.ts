@@ -29,6 +29,7 @@ export function hasGoogleOAuthCredentials() {
 const googleCredentials = getGoogleOAuthCredentials();
 
 export const authConfig: NextAuthConfig = {
+  trustHost: true,
   session: {
     strategy: "jwt",
   },

@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
-import type { UserRole, UserStatus } from "@prisma/client";
 
 import { requireAdmin } from "@/lib/admin/auth";
-import { db } from "@/lib/db";
+import {
+  findUserById,
+  updateUser,
+  type AppUserRole,
+  type AppUserStatus,
+} from "@/lib/app-auth";
 
-const ROLES = new Set(["GUEST", "CUSTOMER", "ADMIN", "SUPER_ADMIN"]);
+const ROLES = new Set(["CUSTOMER", "ADMIN", "SUPER_ADMIN"]);
 const STATUSES = new Set(["ACTIVE", "SUSPENDED"]);
 
 type RouteProps = {
@@ -15,14 +19,7 @@ export async function GET(_request: Request, { params }: RouteProps) {
   const { response } = await requireAdmin();
   if (response) return response;
 
-  const user = await db.user.findUnique({
-    where: { id: params.id },
-    include: {
-      orders: { orderBy: { createdAt: "desc" }, include: { payments: true } },
-      activityLogs: { orderBy: { createdAt: "desc" } },
-      reviews: { orderBy: { createdAt: "desc" }, include: { product: true } },
-    },
-  });
+  const user = await findUserById(params.id);
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -51,30 +48,19 @@ export async function PATCH(request: Request, { params }: RouteProps) {
   }
 
   const data = {
-    ...(role && ROLES.has(role) ? { role: role as UserRole } : {}),
-    ...(status && STATUSES.has(status) ? { status: status as UserStatus } : {}),
+    ...(role && ROLES.has(role) ? { role: role as AppUserRole } : {}),
+    ...(status && STATUSES.has(status) ? { status: status as AppUserStatus } : {}),
   };
 
   if (!Object.keys(data).length) {
     return NextResponse.json({ error: "No valid changes supplied" }, { status: 400 });
   }
 
-  const user = await db.user.update({
-    where: { id: params.id },
-    data,
-  });
+  const user = await updateUser(params.id, data);
 
-  await db.activityLog.create({
-    data: {
-      userId: user.id,
-      action: role ? "ROLE_CHANGED" : "STATUS_CHANGED",
-      metadata: {
-        ...data,
-        changedBy: session?.user?.id,
-      },
-      device: "Admin panel",
-    },
-  });
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
 
   return NextResponse.json({ user });
 }

@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
-
-const ADMIN_ROLES = new Set(["ADMIN", "SUPER_ADMIN"]);
+import { requireAdminUser } from "@/lib/app-auth";
 
 export async function requireAdmin() {
-  const session = await auth();
-  const role = session?.user?.role;
+  const user = await requireAdminUser();
 
-  if (!session?.user?.id || !role || !ADMIN_ROLES.has(role)) {
+  if (!user) {
     return {
       session: null,
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
 
-  return { session, response: null };
+  return { session: { user }, response: null };
 }

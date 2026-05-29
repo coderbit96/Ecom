@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
+import {
+  onAuthStateChanged,
+  signOut as firebaseSignOut,
+  type User as FirebaseUser,
+} from "firebase/auth";
 import {
   Heart,
   Menu,
@@ -17,11 +21,14 @@ import {
 } from "lucide-react";
 
 import { useCart } from "@/lib/cart-context";
+import { getFirebaseAuth } from "@/lib/firebase-client";
 
 type UserNavbarProps = {
   user: {
+    id?: string | null;
     name?: string | null;
     image?: string | null;
+    email?: string | null;
   } | null;
   categories: Array<{
     id: string;
@@ -53,9 +60,23 @@ function UserAvatar({ user }: { user: UserNavbarProps["user"] }) {
 
 export function UserNavbar({ user, categories }: UserNavbarProps) {
   const { cartCount, toggleCart } = useCart();
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [wishlistCount, setWishlistCount] = useState(0);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const displayUser =
+    user ??
+    (firebaseUser
+      ? {
+          name: firebaseUser.displayName,
+          image: firebaseUser.photoURL,
+        }
+      : null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(getFirebaseAuth(), setFirebaseUser);
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -90,6 +111,17 @@ export function UserNavbar({ user, categories }: UserNavbarProps) {
       window.removeEventListener("wishlist:updated", handleWishlistUpdate);
     };
   }, []);
+
+  async function handleLogout() {
+    setIsProfileOpen(false);
+
+    if (firebaseUser) {
+      await firebaseSignOut(getFirebaseAuth());
+    }
+
+    await fetch("/api/app-auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#111827] text-white shadow-sm">
@@ -164,7 +196,7 @@ export function UserNavbar({ user, categories }: UserNavbarProps) {
                 aria-label="User menu"
                 onClick={() => setIsProfileOpen((prev) => !prev)}
               >
-                <UserAvatar user={user} />
+                <UserAvatar user={displayUser} />
               </button>
 
               {isProfileOpen ? (
@@ -188,7 +220,7 @@ export function UserNavbar({ user, categories }: UserNavbarProps) {
                   <button
                     type="button"
                     className="flex w-full items-center gap-2 rounded px-2.5 py-2 text-left text-sm transition hover:bg-[#f1f5f9]"
-                    onClick={() => signOut({ callbackUrl: "/login" })}
+                    onClick={handleLogout}
                   >
                     <LogOut className="h-4 w-4" />
                     <span>Logout</span>

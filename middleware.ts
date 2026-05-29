@@ -38,5 +38,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/admin/:path*", "/user/:path*"],
+  matcher: ["/__unused-auth-middleware/:path*"],
 };

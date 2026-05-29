@@ -2,15 +2,16 @@ import Link from "next/link";
 
 import { StatusBadge } from "@/components/admin/status-badge";
 import { UserBulkActions } from "@/components/admin/user-bulk-actions";
-import { getString, getUserList, type SearchParams } from "@/lib/admin/data";
+import { getString, type SearchParams } from "@/lib/admin/data";
 import { formatCurrency, formatDate } from "@/lib/admin/format";
+import { listUsers } from "@/lib/app-auth";
 
 export default async function AdminUsersPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  const data = await getUserList(searchParams);
+  const data = await listUsers(searchParams);
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
     if (typeof value === "string" && value) query.set(key, value);
@@ -74,9 +75,9 @@ export default async function AdminUsersPage({
               {data.users.map((user) => (
                 <tr key={user.id}>
                   <td className="px-4 py-3">
-                    {user.avatarUrl || user.image ? (
+                    {user.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={user.avatarUrl ?? user.image ?? ""} alt="" className="size-9 rounded-full object-cover" />
+                      <img src={user.image} alt="" className="size-9 rounded-full object-cover" />
                     ) : (
                       <div className="flex size-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
                         {(user.name ?? user.email).slice(0, 2).toUpperCase()}
@@ -88,8 +89,8 @@ export default async function AdminUsersPage({
                   <td className="px-4 py-3"><StatusBadge value={user.role} /></td>
                   <td className="px-4 py-3"><StatusBadge value={user.status} /></td>
                   <td className="px-4 py-3">{formatDate(user.createdAt)}</td>
-                  <td className="px-4 py-3">{user.orderCount}</td>
-                  <td className="px-4 py-3">{formatCurrency(user.totalSpend)}</td>
+                  <td className="px-4 py-3">0</td>
+                  <td className="px-4 py-3">{formatCurrency(0)}</td>
                   <td className="px-4 py-3">
                     <Link className="font-medium text-blue-700 hover:underline" href={`/admin/users/${user.id}`}>
                       View

@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { DealsOfTheDay } from "@/components/user/deals-of-the-day";
 import { FeaturedCategories } from "@/components/user/featured-categories";
@@ -7,6 +7,7 @@ import { ProductRow } from "@/components/user/product-row";
 import { RecentlyViewed } from "@/components/user/recently-viewed";
 import type { ProductCardData } from "@/components/user/ProductCard";
 import type { Metadata } from "next";
+import { getCurrentUser } from "@/lib/app-auth";
 import { fallbackCategories, fallbackProducts } from "@/lib/storefront-fallback";
 
 export const metadata: Metadata = {
@@ -108,7 +109,11 @@ async function getBestSellers(): Promise<ProductWithImage[]> {
 }
 
 export default async function UserHomePage() {
-  const session = await auth().catch(() => null);
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
 
   const [categories, newArrivalsRaw, dealsRaw, bestSellersRaw] = await Promise.all([
     db.category
@@ -226,7 +231,7 @@ export default async function UserHomePage() {
 
       <DealsOfTheDay products={dealsOfTheDay} endsAt={endOfTodayIso()} />
 
-      <RecentlyViewed isLoggedIn={Boolean(session?.user)} />
+      <RecentlyViewed isLoggedIn={Boolean(user)} />
     </div>
   );
 }

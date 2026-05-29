@@ -153,114 +153,131 @@ export async function getDashboardData() {
   const ninetyDaysAgo = new Date(today);
   ninetyDaysAgo.setDate(today.getDate() - 89);
 
-  const [
-    currentRevenue,
-    lastRevenue,
-    totalOrders,
-    newUsersToday,
-    activeSessions,
-    payments,
-    orders,
-    lowStockProducts,
-    recentOrders,
-    topProductGroups,
-  ] = await Promise.all([
-    db.payment.aggregate({
-      where: { status: "SUCCESS", paidAt: { gte: monthStart } },
-      _sum: { amount: true },
-    }),
-    db.payment.aggregate({
-      where: { status: "SUCCESS", paidAt: { gte: lastMonthStart, lt: monthStart } },
-      _sum: { amount: true },
-    }),
-    db.order.count(),
-    db.user.count({ where: { createdAt: { gte: today } } }),
-    db.session.count({ where: { expires: { gt: now } } }),
-    db.payment.findMany({
-      where: { status: "SUCCESS", paidAt: { gte: ninetyDaysAgo } },
-      select: { amount: true, paidAt: true, order: { select: { createdAt: true } } },
-    }),
-    db.order.findMany({
-      where: { createdAt: { gte: ninetyDaysAgo } },
-      select: { createdAt: true },
-    }),
-    db.product.findMany({
-      where: { stock: { lt: 10 } },
-      orderBy: { stock: "asc" },
-      take: 8,
-      include: { images: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }], take: 1 } },
-    }),
-    db.order.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      include: { user: true, payments: true, items: true },
-    }),
-    db.orderItem.groupBy({
-      by: ["productId"],
-      _sum: { qty: true, totalPrice: true },
-      orderBy: { _sum: { qty: "desc" } },
-      take: 5,
-    }),
-  ]);
-
   const chartData = buildDailySeries(90);
-  const byDay = new Map(chartData.map((item) => [item.key, item]));
 
-  payments.forEach((payment) => {
-    const paidAt = payment.paidAt ?? payment.order.createdAt;
-    const item = byDay.get(dayKey(paidAt));
-    if (item) item.revenue += payment.amount;
-  });
-
-  orders.forEach((order) => {
-    const item = byDay.get(dayKey(order.createdAt));
-    if (item) item.orders += 1;
-  });
-
-  const productIds = topProductGroups.map((item) => item.productId);
-  const topProducts = productIds.length
-    ? await db.product.findMany({
-        where: { id: { in: productIds } },
-        include: {
-          images: {
-            orderBy: [{ isPrimary: "desc" }, { order: "asc" }],
-            take: 1,
-          },
-        },
-      })
-    : [];
-  const productMap = new Map(topProducts.map((product) => [product.id, product]));
-  const lastMonthValue = lastRevenue._sum.amount ?? 0;
-  const totalRevenue = currentRevenue._sum.amount ?? 0;
-
-  return {
-    kpis: {
-      totalRevenue,
-      revenueChange:
-        lastMonthValue > 0
-          ? ((totalRevenue - lastMonthValue) / lastMonthValue) * 100
-          : totalRevenue > 0
-            ? 100
-            : 0,
+  try {
+    const [
+      currentRevenue,
+      lastRevenue,
       totalOrders,
       newUsersToday,
       activeSessions,
-    },
-    chartData,
-    lowStockProducts,
-    recentOrders,
-    topProducts: topProductGroups.map((group, index) => {
-      const product = productMap.get(group.productId);
-      return {
-        rank: index + 1,
-        id: group.productId,
-        name: product?.title ?? "Deleted product",
-        image: product?.images[0]?.url ?? FALLBACK_IMAGE,
-        unitsSold: group._sum.qty ?? 0,
-        revenue: group._sum.totalPrice ?? 0,
-      };
-    }),
-  };
+      payments,
+      orders,
+      lowStockProducts,
+      recentOrders,
+      topProductGroups,
+    ] = await Promise.all([
+      db.payment.aggregate({
+        where: { status: "SUCCESS", paidAt: { gte: monthStart } },
+        _sum: { amount: true },
+      }),
+      db.payment.aggregate({
+        where: { status: "SUCCESS", paidAt: { gte: lastMonthStart, lt: monthStart } },
+        _sum: { amount: true },
+      }),
+      db.order.count(),
+      db.user.count({ where: { createdAt: { gte: today } } }),
+      db.session.count({ where: { expires: { gt: now } } }),
+      db.payment.findMany({
+        where: { status: "SUCCESS", paidAt: { gte: ninetyDaysAgo } },
+        select: { amount: true, paidAt: true, order: { select: { createdAt: true } } },
+      }),
+      db.order.findMany({
+        where: { createdAt: { gte: ninetyDaysAgo } },
+        select: { createdAt: true },
+      }),
+      db.product.findMany({
+        where: { stock: { lt: 10 } },
+        orderBy: { stock: "asc" },
+        take: 8,
+        include: { images: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }], take: 1 } },
+      }),
+      db.order.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        include: { user: true, payments: true, items: true },
+      }),
+      db.orderItem.groupBy({
+        by: ["productId"],
+        _sum: { qty: true, totalPrice: true },
+        orderBy: { _sum: { qty: "desc" } },
+        take: 5,
+      }),
+    ]);
+
+    const byDay = new Map(chartData.map((item) => [item.key, item]));
+
+    payments.forEach((payment) => {
+      const paidAt = payment.paidAt ?? payment.order.createdAt;
+      const item = byDay.get(dayKey(paidAt));
+      if (item) item.revenue += payment.amount;
+    });
+
+    orders.forEach((order) => {
+      const item = byDay.get(dayKey(order.createdAt));
+      if (item) item.orders += 1;
+    });
+
+    const productIds = topProductGroups.map((item) => item.productId);
+    const topProducts = productIds.length
+      ? await db.product.findMany({
+          where: { id: { in: productIds } },
+          include: {
+            images: {
+              orderBy: [{ isPrimary: "desc" }, { order: "asc" }],
+              take: 1,
+            },
+          },
+        })
+      : [];
+    const productMap = new Map(topProducts.map((product) => [product.id, product]));
+    const lastMonthValue = lastRevenue._sum.amount ?? 0;
+    const totalRevenue = currentRevenue._sum.amount ?? 0;
+
+    return {
+      kpis: {
+        totalRevenue,
+        revenueChange:
+          lastMonthValue > 0
+            ? ((totalRevenue - lastMonthValue) / lastMonthValue) * 100
+            : totalRevenue > 0
+              ? 100
+              : 0,
+        totalOrders,
+        newUsersToday,
+        activeSessions,
+      },
+      chartData,
+      lowStockProducts,
+      recentOrders,
+      topProducts: topProductGroups.map((group, index) => {
+        const product = productMap.get(group.productId);
+        return {
+          rank: index + 1,
+          id: group.productId,
+          name: product?.title ?? "Deleted product",
+          image: product?.images[0]?.url ?? FALLBACK_IMAGE,
+          unitsSold: group._sum.qty ?? 0,
+          revenue: group._sum.totalPrice ?? 0,
+        };
+      }),
+    };
+  } catch {
+    return {
+      kpis: {
+        totalRevenue: 0,
+        revenueChange: 0,
+        totalOrders: 0,
+        newUsersToday: 0,
+        activeSessions: 0,
+      },
+      chartData,
+      lowStockProducts: [],
+      recentOrders: [],
+      topProducts: [],
+    };
+  }
 }
 
 export async function getUserList(params: SearchParams) {
@@ -292,59 +309,79 @@ export async function getUserList(params: SearchParams) {
 export async function getProductList(params: SearchParams) {
   const page = getPage(params);
   const where = buildProductWhere(params);
-  const [products, total, categories] = await Promise.all([
-    db.product.findMany({
-      where,
-      orderBy: { updatedAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: {
-        category: true,
-        images: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }], take: 1 },
-      },
-    }),
-    db.product.count({ where }),
-    db.category.findMany({ orderBy: [{ order: "asc" }, { name: "asc" }] }),
-  ]);
 
-  return {
-    products,
-    categories,
-    total,
-    page,
-    pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
-  };
+  try {
+    const [products, total, categories] = await Promise.all([
+      db.product.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+        include: {
+          category: true,
+          images: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }], take: 1 },
+        },
+      }),
+      db.product.count({ where }),
+      db.category.findMany({ orderBy: [{ order: "asc" }, { name: "asc" }] }),
+    ]);
+
+    return {
+      products,
+      categories,
+      total,
+      page,
+      pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    };
+  } catch {
+    return {
+      products: [],
+      categories: [],
+      total: 0,
+      page,
+      pageCount: 1,
+    };
+  }
 }
 
 export async function getOrderList(params: SearchParams) {
   const page = getPage(params);
   const where = buildOrderWhere(params);
-  const [orders, total] = await Promise.all([
-    db.order.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: { user: true, items: true, payments: true },
-    }),
-    db.order.count({ where }),
-  ]);
 
-  return { orders, total, page, pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+  try {
+    const [orders, total] = await Promise.all([
+      db.order.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+        include: { user: true, items: true, payments: true },
+      }),
+      db.order.count({ where }),
+    ]);
+
+    return { orders, total, page, pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+  } catch {
+    return { orders: [], total: 0, page, pageCount: 1 };
+  }
 }
 
 export async function getCategoryOptions() {
-  const categories = await db.category.findMany({
-    orderBy: [{ order: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, parentId: true },
-  });
-  const byId = new Map(categories.map((category) => [category.id, category]));
+  try {
+    const categories = await db.category.findMany({
+      orderBy: [{ order: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, parentId: true },
+    });
+    const byId = new Map(categories.map((category) => [category.id, category]));
 
-  function labelFor(id: string): string {
-    const category = byId.get(id);
-    if (!category) return "Unknown";
-    return category.parentId ? `${labelFor(category.parentId)} / ${category.name}` : category.name;
+    const labelFor = (id: string): string => {
+      const category = byId.get(id);
+      if (!category) return "Unknown";
+      return category.parentId ? `${labelFor(category.parentId)} / ${category.name}` : category.name;
+    };
+
+    return categories.map((category) => ({ id: category.id, label: labelFor(category.id) }));
+  } catch {
+    return [];
   }
-
-  return categories.map((category) => ({ id: category.id, label: labelFor(category.id) }));
 }
