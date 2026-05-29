@@ -33,7 +33,14 @@ export function GoogleSignInButton({ enabled }: { enabled: boolean }) {
       });
 
       if (!response.ok) {
-        throw new Error("APP_SESSION_FAILED");
+        const result = (await response.json().catch(() => null)) as {
+          error?: unknown;
+        } | null;
+        throw new Error(
+          typeof result?.error === "string"
+            ? result.error
+            : "Google sign-in failed on the server."
+        );
       }
 
       router.push("/");
@@ -47,7 +54,9 @@ export function GoogleSignInButton({ enabled }: { enabled: boolean }) {
       setError(
         code === "auth/popup-closed-by-user"
           ? "Google sign-in was cancelled."
-          : "Google sign-in failed. Check Firebase Authentication setup."
+          : signInError instanceof Error && signInError.message
+            ? signInError.message
+            : "Google sign-in failed. Check Firebase Authentication setup."
       );
     } finally {
       setIsSigningIn(false);
