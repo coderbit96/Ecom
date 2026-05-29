@@ -32,6 +32,8 @@ type AdminOrderDetail = Prisma.OrderGetPayload<{
   include: typeof orderDetailInclude;
 }>;
 
+type AdminOrderItem = AdminOrderDetail["items"][number];
+
 export default async function AdminOrderDetailPage({
   params,
 }: {
@@ -109,7 +111,7 @@ export default async function AdminOrderDetailPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {order.items.map((item) => (
+              {order.items.map((item: AdminOrderItem) => (
                 <tr key={item.id}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
