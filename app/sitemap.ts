@@ -2,6 +2,8 @@ import type { MetadataRoute } from "next";
 
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 function siteUrl(path = "") {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ??
@@ -13,13 +15,17 @@ function siteUrl(path = "") {
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [products, categories] = await Promise.all([
-    db.product.findMany({
-      where: { status: "PUBLISHED" },
-      select: { slug: true, updatedAt: true },
-    }),
-    db.category.findMany({
-      select: { slug: true },
-    }),
+    db.product
+      .findMany({
+        where: { status: "PUBLISHED" },
+        select: { slug: true, updatedAt: true },
+      })
+      .catch(() => []),
+    db.category
+      .findMany({
+        select: { slug: true },
+      })
+      .catch(() => []),
   ]);
 
   return [

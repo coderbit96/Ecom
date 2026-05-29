@@ -7,11 +7,7 @@ import { ProductRow } from "@/components/user/product-row";
 import { RecentlyViewed } from "@/components/user/recently-viewed";
 import type { ProductCardData } from "@/components/user/ProductCard";
 import type { Metadata } from "next";
-import {
-  fallbackCategories,
-  fallbackHeroSlides,
-  fallbackProducts,
-} from "@/lib/storefront-fallback";
+import { fallbackCategories, fallbackProducts } from "@/lib/storefront-fallback";
 
 export const metadata: Metadata = {
   title: "Premium Commerce | Curated Online Shopping",
