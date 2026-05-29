@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 
 import { OrderDetailActions } from "@/components/admin/order-detail-actions";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -8,24 +9,37 @@ import { db } from "@/lib/db";
 
 const STATUS_STEPS = ["PROCESSING", "CONFIRMED", "SHIPPED", "DELIVERED"];
 
+const orderDetailInclude = {
+  user: true,
+  address: true,
+  payments: true,
+  items: {
+    include: {
+      variant: true,
+      product: {
+        include: {
+          images: {
+            orderBy: [{ isPrimary: "desc" }, { order: "asc" }],
+            take: 1,
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.OrderInclude;
+
+type AdminOrderDetail = Prisma.OrderGetPayload<{
+  include: typeof orderDetailInclude;
+}>;
+
 export default async function AdminOrderDetailPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const order = await db.order.findUnique({
+  const order: AdminOrderDetail | null = await db.order.findUnique({
     where: { id: params.id },
-    include: {
-      user: true,
-      address: true,
-      payments: true,
-      items: {
-        include: {
-          variant: true,
-          product: { include: { images: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }], take: 1 } } },
-        },
-      },
-    },
+    include: orderDetailInclude,
   });
 
   if (!order) notFound();
