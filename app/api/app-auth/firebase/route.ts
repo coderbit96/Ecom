@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 
-import { createOrUpdateExternalUser, setSession } from "@/lib/app-auth";
+import {
+  createOrUpdateExternalUser,
+  getAuthConfigError,
+  getAuthDatabaseErrorMessage,
+  setSession,
+} from "@/lib/app-auth";
 
 export async function POST(request: Request) {
   try {
+    const configError = getAuthConfigError();
+    if (configError) {
+      return NextResponse.json({ error: configError }, { status: 503 });
+    }
+
     const body = (await request.json().catch(() => null)) as {
       email?: unknown;
       name?: unknown;
@@ -18,13 +28,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Google account email is required." }, { status: 400 });
     }
 
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json(
-        { error: "Server database is not configured. Add DATABASE_URL in Vercel Environment Variables." },
-        { status: 503 }
-      );
-    }
-
     const user = await createOrUpdateExternalUser({ email, name, image });
     await setSession(user.id);
 
@@ -33,8 +36,8 @@ export async function POST(request: Request) {
     console.error("Firebase app auth failed", error);
 
     return NextResponse.json(
-      { error: "Google sign-in failed on the server. Check Vercel logs and environment variables." },
-      { status: 500 }
+      { error: getAuthDatabaseErrorMessage(error) },
+      { status: 503 }
     );
   }
 }

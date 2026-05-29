@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 
-import { createUser, setSession } from "@/lib/app-auth";
+import {
+  createUser,
+  getAuthConfigError,
+  getAuthDatabaseErrorMessage,
+  setSession,
+} from "@/lib/app-auth";
 
 export async function POST(request: Request) {
+  const configError = getAuthConfigError();
+  if (configError) {
+    return NextResponse.json({ error: configError }, { status: 503 });
+  }
+
   const body = (await request.json().catch(() => null)) as {
     email?: unknown;
     name?: unknown;
@@ -30,6 +40,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
     }
 
-    return NextResponse.json({ error: "Could not create account." }, { status: 500 });
+    console.error("Email signup failed", error);
+
+    return NextResponse.json(
+      { error: getAuthDatabaseErrorMessage(error) },
+      { status: 503 }
+    );
   }
 }

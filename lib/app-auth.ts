@@ -24,6 +24,7 @@ export type PublicAppUser = {
 const SESSION_COOKIE = "ecom_app_session";
 const PAGE_SIZE = 20;
 const MONGO_OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
+const LOCAL_SECRET = "local-ecom-app-auth-secret-change-before-production";
 
 function getAdminEmail() {
   return process.env.ADMIN_EMAIL?.trim().toLowerCase() || "admin@coderbit.in";
@@ -40,6 +41,59 @@ function getSessionSecret() {
     process.env.NEXTAUTH_SECRET ||
     "local-development-secret"
   );
+}
+
+export function getAuthConfigError() {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  const appSecret = process.env.APP_AUTH_SECRET?.trim();
+
+  if (!databaseUrl) {
+    return "DATABASE_URL is missing in server environment variables.";
+  }
+
+  if (databaseUrl.startsWith("\"") || databaseUrl.startsWith("'")) {
+    return "DATABASE_URL must be added without quotes in Vercel Environment Variables.";
+  }
+
+  if (!databaseUrl.startsWith("mongodb://") && !databaseUrl.startsWith("mongodb+srv://")) {
+    return "DATABASE_URL must be a MongoDB connection string.";
+  }
+
+  if (process.env.NODE_ENV === "production" && (!appSecret || appSecret === LOCAL_SECRET)) {
+    return "APP_AUTH_SECRET must be set to a strong production secret.";
+  }
+
+  return null;
+}
+
+export function getAuthDatabaseErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("Environment variable not found: DATABASE_URL")) {
+    return "DATABASE_URL is missing in server environment variables.";
+  }
+
+  if (
+    message.includes("Can't reach database server") ||
+    message.includes("Server selection timeout") ||
+    message.includes("ETIMEDOUT")
+  ) {
+    return "Database connection failed. Check MongoDB Atlas Network Access for Vercel.";
+  }
+
+  if (
+    message.includes("Authentication failed") ||
+    message.includes("SCRAM failure") ||
+    message.includes("bad auth")
+  ) {
+    return "Database authentication failed. Check the MongoDB username and password in DATABASE_URL.";
+  }
+
+  if (message.includes("Invalid scheme") || message.includes("must start with the protocol")) {
+    return "DATABASE_URL is invalid. Use a MongoDB URI without extra quotes.";
+  }
+
+  return "Authentication database request failed. Check Vercel logs and environment variables.";
 }
 
 function hashPassword(password: string) {
