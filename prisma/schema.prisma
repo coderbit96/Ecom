@@ -63,10 +63,12 @@ model User {
   image        String?
   avatarUrl    String?
   phone        String?
+  passwordHash String?
   role         UserRole      @default(CUSTOMER)
   status       UserStatus    @default(ACTIVE)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  lastLoginAt  DateTime?
   accounts     Account[]
   sessions     Session[]
   addresses    Address[]

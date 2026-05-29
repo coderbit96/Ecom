@@ -22,14 +22,16 @@ function formatTime(ms: number) {
 }
 
 export function DealsOfTheDay({ products, endsAt }: DealsOfTheDayProps) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
+    setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
   const remaining = useMemo(() => {
+    if (now === null) return "--:--:--";
     const end = new Date(endsAt).getTime();
     return formatTime(end - now);
   }, [endsAt, now]);

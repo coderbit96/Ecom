@@ -1,30 +1,27 @@
 import "server-only";
 
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHmac } from "crypto";
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import type { UserRole, UserStatus } from "@prisma/client";
 
-export type AppUserRole = "CUSTOMER" | "ADMIN" | "SUPER_ADMIN";
-export type AppUserStatus = "ACTIVE" | "SUSPENDED";
+import { db } from "@/lib/db";
 
-export type AppUser = {
+export type AppUserRole = Extract<UserRole, "CUSTOMER" | "ADMIN" | "SUPER_ADMIN">;
+export type AppUserStatus = UserStatus;
+
+export type PublicAppUser = {
   id: string;
   email: string;
-  name: string;
-  image?: string | null;
-  passwordHash: string;
+  name: string | null;
+  image: string | null;
   role: AppUserRole;
   status: AppUserStatus;
-  createdAt: string;
-  updatedAt: string;
-  lastLoginAt?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  lastLoginAt: Date | null;
 };
 
-export type PublicAppUser = Omit<AppUser, "passwordHash">;
-
 const SESSION_COOKIE = "ecom_app_session";
-const STORE_PATH = path.join(process.cwd(), "data", "users.json");
 const PAGE_SIZE = 20;
 
 function getAdminEmail() {
@@ -44,19 +41,15 @@ function getSessionSecret() {
   );
 }
 
-function toPublicUser(user: AppUser): PublicAppUser {
-  const { passwordHash, ...publicUser } = user;
-  void passwordHash;
-  return publicUser;
-}
-
 function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
 }
 
-function verifyPassword(password: string, passwordHash: string) {
+function verifyPassword(password: string, passwordHash?: string | null) {
+  if (!passwordHash) return false;
+
   const [salt, hash] = passwordHash.split(":");
   if (!salt || !hash) return false;
 
@@ -64,6 +57,30 @@ function verifyPassword(password: string, passwordHash: string) {
   const storedHash = Buffer.from(hash, "hex");
 
   return storedHash.length === currentHash.length && timingSafeEqual(storedHash, currentHash);
+}
+
+function toPublicUser(user: {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  role: UserRole;
+  status: UserStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  lastLoginAt: Date | null;
+}): PublicAppUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    image: user.image,
+    role: user.role === "ADMIN" || user.role === "SUPER_ADMIN" ? user.role : "CUSTOMER",
+    status: user.status,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    lastLoginAt: user.lastLoginAt,
+  };
 }
 
 function signPayload(payload: string) {
@@ -95,50 +112,45 @@ function readSessionToken(token?: string) {
   return data.userId;
 }
 
-async function saveUsers(users: AppUser[]) {
-  await mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await writeFile(STORE_PATH, JSON.stringify(users, null, 2));
+async function ensureAdminUser() {
+  const email = getAdminEmail();
+  const existing = await db.user.findUnique({ where: { email } });
+  const passwordHash = hashPassword(getAdminPassword());
+
+  if (!existing) {
+    return db.user.create({
+      data: {
+        email,
+        name: "Admin",
+        passwordHash,
+        role: "SUPER_ADMIN",
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  if (
+    existing.role !== "SUPER_ADMIN" ||
+    existing.status !== "ACTIVE" ||
+    !existing.passwordHash
+  ) {
+    return db.user.update({
+      where: { id: existing.id },
+      data: {
+        passwordHash: existing.passwordHash || passwordHash,
+        role: "SUPER_ADMIN",
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  return existing;
 }
 
 export async function getUsers() {
-  let users: AppUser[] = [];
-
-  try {
-    users = JSON.parse(await readFile(STORE_PATH, "utf8")) as AppUser[];
-  } catch {
-    users = [];
-  }
-
-  const adminEmail = getAdminEmail();
-  const adminIndex = users.findIndex((user) => user.email.toLowerCase() === adminEmail);
-  const now = new Date().toISOString();
-
-  if (adminIndex === -1) {
-    users.unshift({
-      id: randomUUID(),
-      email: adminEmail,
-      name: "Admin",
-      passwordHash: hashPassword(getAdminPassword()),
-      role: "SUPER_ADMIN",
-      status: "ACTIVE",
-      createdAt: now,
-      updatedAt: now,
-    });
-    await saveUsers(users);
-  } else {
-    const admin = users[adminIndex];
-    if (admin.role !== "SUPER_ADMIN" || admin.status !== "ACTIVE") {
-      users[adminIndex] = {
-        ...admin,
-        role: "SUPER_ADMIN",
-        status: "ACTIVE",
-        updatedAt: now,
-      };
-      await saveUsers(users);
-    }
-  }
-
-  return users;
+  await ensureAdminUser();
+  const users = await db.user.findMany({ orderBy: { createdAt: "desc" } });
+  return users.map(toPublicUser);
 }
 
 export async function listUsers(params: Record<string, string | string[] | undefined>) {
@@ -150,20 +162,19 @@ export async function listUsers(params: Record<string, string | string[] | undef
   const from = Array.isArray(params.from) ? params.from[0] : params.from;
   const to = Array.isArray(params.to) ? params.to[0] : params.to;
 
-  let users = (await getUsers()).map(toPublicUser);
+  let users = await getUsers();
 
   if (q) {
     users = users.filter(
       (user) =>
-        user.email.toLowerCase().includes(q) || user.name.toLowerCase().includes(q)
+        user.email.toLowerCase().includes(q) ||
+        (user.name ?? "").toLowerCase().includes(q)
     );
   }
   if (role) users = users.filter((user) => user.role === role);
   if (status) users = users.filter((user) => user.status === status);
-  if (from) users = users.filter((user) => user.createdAt >= `${from}T00:00:00.000Z`);
-  if (to) users = users.filter((user) => user.createdAt <= `${to}T23:59:59.999Z`);
-
-  users.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  if (from) users = users.filter((user) => user.createdAt >= new Date(`${from}T00:00:00.000Z`));
+  if (to) users = users.filter((user) => user.createdAt <= new Date(`${to}T23:59:59.999Z`));
 
   const total = users.length;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -177,7 +188,8 @@ export async function listUsers(params: Record<string, string | string[] | undef
 }
 
 export async function findUserById(id: string) {
-  return (await getUsers()).find((user) => user.id === id) ?? null;
+  const user = await db.user.findUnique({ where: { id } });
+  return user ? toPublicUser(user) : null;
 }
 
 export async function createUser({
@@ -189,27 +201,23 @@ export async function createUser({
   name: string;
   password: string;
 }) {
-  const users = await getUsers();
   const normalizedEmail = email.trim().toLowerCase();
+  const existing = await db.user.findUnique({ where: { email: normalizedEmail } });
 
-  if (users.some((user) => user.email.toLowerCase() === normalizedEmail)) {
+  if (existing) {
     throw new Error("EMAIL_EXISTS");
   }
 
-  const now = new Date().toISOString();
-  const user: AppUser = {
-    id: randomUUID(),
-    email: normalizedEmail,
-    name: name.trim() || normalizedEmail.split("@")[0],
-    passwordHash: hashPassword(password),
-    role: "CUSTOMER",
-    status: "ACTIVE",
-    createdAt: now,
-    updatedAt: now,
-  };
+  const user = await db.user.create({
+    data: {
+      email: normalizedEmail,
+      name: name.trim() || normalizedEmail.split("@")[0],
+      passwordHash: hashPassword(password),
+      role: "CUSTOMER",
+      status: "ACTIVE",
+    },
+  });
 
-  users.push(user);
-  await saveUsers(users);
   return toPublicUser(user);
 }
 
@@ -222,76 +230,63 @@ export async function createOrUpdateExternalUser({
   name?: string | null;
   image?: string | null;
 }) {
-  const users = await getUsers();
   const normalizedEmail = email.trim().toLowerCase();
-  const now = new Date().toISOString();
-  const existingIndex = users.findIndex(
-    (user) => user.email.toLowerCase() === normalizedEmail
-  );
+  const existing = await db.user.findUnique({ where: { email: normalizedEmail } });
 
-  if (existingIndex >= 0) {
-    users[existingIndex] = {
-      ...users[existingIndex],
-      name: name?.trim() || users[existingIndex].name,
-      image: image ?? users[existingIndex].image,
-      lastLoginAt: now,
-      updatedAt: now,
-    };
-    await saveUsers(users);
-    return toPublicUser(users[existingIndex]);
-  }
+  const user = existing
+    ? await db.user.update({
+        where: { id: existing.id },
+        data: {
+          name: name?.trim() || existing.name,
+          image: image ?? existing.image,
+          avatarUrl: image ?? existing.avatarUrl,
+          lastLoginAt: new Date(),
+        },
+      })
+    : await db.user.create({
+        data: {
+          email: normalizedEmail,
+          name: name?.trim() || normalizedEmail.split("@")[0],
+          image: image ?? null,
+          avatarUrl: image ?? null,
+          role: "CUSTOMER",
+          status: "ACTIVE",
+          lastLoginAt: new Date(),
+        },
+      });
 
-  const user: AppUser = {
-    id: randomUUID(),
-    email: normalizedEmail,
-    name: name?.trim() || normalizedEmail.split("@")[0],
-    image: image ?? null,
-    passwordHash: hashPassword(randomUUID()),
-    role: "CUSTOMER",
-    status: "ACTIVE",
-    createdAt: now,
-    updatedAt: now,
-    lastLoginAt: now,
-  };
-
-  users.push(user);
-  await saveUsers(users);
   return toPublicUser(user);
 }
 
 export async function authenticateUser(email: string, password: string) {
-  const users = await getUsers();
-  const normalizedEmail = email.trim().toLowerCase();
-  const user = users.find((item) => item.email.toLowerCase() === normalizedEmail);
+  await ensureAdminUser();
+
+  const user = await db.user.findUnique({
+    where: { email: email.trim().toLowerCase() },
+  });
 
   if (!user || !verifyPassword(password, user.passwordHash) || user.status === "SUSPENDED") {
     return null;
   }
 
-  user.lastLoginAt = new Date().toISOString();
-  user.updatedAt = user.lastLoginAt;
-  await saveUsers(users);
+  const updatedUser = await db.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date() },
+  });
 
-  return toPublicUser(user);
+  return toPublicUser(updatedUser);
 }
 
 export async function updateUser(
   id: string,
-  updates: Partial<Pick<AppUser, "role" | "status" | "name">>
+  updates: Partial<Pick<PublicAppUser, "role" | "status" | "name">>
 ) {
-  const users = await getUsers();
-  const index = users.findIndex((user) => user.id === id);
-  if (index === -1) return null;
+  const user = await db.user.update({
+    where: { id },
+    data: updates,
+  });
 
-  const user = users[index];
-  users[index] = {
-    ...user,
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  };
-
-  await saveUsers(users);
-  return toPublicUser(users[index]);
+  return toPublicUser(user);
 }
 
 export async function setSession(userId: string) {
@@ -318,7 +313,7 @@ export async function getCurrentUser() {
   const user = await findUserById(userId);
   if (!user || user.status === "SUSPENDED") return null;
 
-  return toPublicUser(user);
+  return user;
 }
 
 export async function requireAdminUser() {
