@@ -28,6 +28,44 @@ const PAYMENT_METHODS = new Set(["CARD", "NETBANKING", "UPI", "WALLET", "QR"]);
 
 export type SearchParams = Record<string, string | string[] | undefined>;
 
+type DashboardChartPoint = {
+  key: string;
+  date: string;
+  revenue: number;
+  orders: number;
+};
+
+type DashboardTopProduct = {
+  rank: number;
+  id: string;
+  name: string;
+  image: string;
+  unitsSold: number;
+  revenue: number;
+};
+
+type DashboardLowStockProduct = Prisma.ProductGetPayload<{
+  include: { images: true };
+}>;
+
+type DashboardRecentOrder = Prisma.OrderGetPayload<{
+  include: { user: true; payments: true; items: true };
+}>;
+
+export type DashboardData = {
+  kpis: {
+    totalRevenue: number;
+    revenueChange: number;
+    totalOrders: number;
+    newUsersToday: number;
+    activeSessions: number;
+  };
+  chartData: DashboardChartPoint[];
+  lowStockProducts: DashboardLowStockProduct[];
+  recentOrders: DashboardRecentOrder[];
+  topProducts: DashboardTopProduct[];
+};
+
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -144,7 +182,7 @@ function buildDailySeries(days: number) {
   });
 }
 
-export async function getDashboardData() {
+export async function getDashboardData(): Promise<DashboardData> {
   const now = new Date();
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
