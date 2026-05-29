@@ -1,0 +1,10 @@
+export { CartDrawer } from "@/components/user/cart-drawer";
+export { UserCategoryBar } from "@/components/user/user-category-bar";
+export { UserFooter } from "@/components/user/user-footer";
+export { UserNavbar } from "@/components/user/user-navbar";
+export { ProductCard } from "@/components/user/ProductCard";
+export { HeroBanner } from "@/components/user/hero-banner";
+export { FeaturedCategories } from "@/components/user/featured-categories";
+export { ProductRow } from "@/components/user/product-row";
+export { DealsOfTheDay } from "@/components/user/deals-of-the-day";
+export { RecentlyViewed } from "@/components/user/recently-viewed";
