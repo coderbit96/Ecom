@@ -23,6 +23,7 @@ export type PublicAppUser = {
 
 const SESSION_COOKIE = "ecom_app_session";
 const PAGE_SIZE = 20;
+const MONGO_OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
 
 function getAdminEmail() {
   return process.env.ADMIN_EMAIL?.trim().toLowerCase() || "admin@coderbit.in";
@@ -188,6 +189,8 @@ export async function listUsers(params: Record<string, string | string[] | undef
 }
 
 export async function findUserById(id: string) {
+  if (!MONGO_OBJECT_ID_PATTERN.test(id)) return null;
+
   const user = await db.user.findUnique({ where: { id } });
   return user ? toPublicUser(user) : null;
 }
@@ -281,6 +284,8 @@ export async function updateUser(
   id: string,
   updates: Partial<Pick<PublicAppUser, "role" | "status" | "name">>
 ) {
+  if (!MONGO_OBJECT_ID_PATTERN.test(id)) return null;
+
   const user = await db.user.update({
     where: { id },
     data: updates,
@@ -309,6 +314,10 @@ export function clearSession() {
 export async function getCurrentUser() {
   const userId = readSessionToken(cookies().get(SESSION_COOKIE)?.value);
   if (!userId) return null;
+
+  if (!MONGO_OBJECT_ID_PATTERN.test(userId)) {
+    return null;
+  }
 
   const user = await findUserById(userId);
   if (!user || user.status === "SUSPENDED") return null;
