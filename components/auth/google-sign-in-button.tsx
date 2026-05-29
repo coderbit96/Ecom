@@ -6,6 +6,7 @@ import { useState } from "react";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 import { getFirebaseAuth } from "@/lib/firebase-client";
+import { LoadingAnimation } from "@/components/shared/loading-animation";
 
 export function GoogleSignInButton({ enabled }: { enabled: boolean }) {
   const router = useRouter();
@@ -71,11 +72,17 @@ export function GoogleSignInButton({ enabled }: { enabled: boolean }) {
         disabled={!enabled || isSigningIn}
         className="flex h-16 w-full items-center justify-center gap-3 rounded-3xl border border-slate-700/80 bg-[#111827] px-4 text-base font-semibold text-white transition hover:border-cyan-300/70 hover:bg-[#172033] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <span className="inline-flex size-7 items-center justify-center rounded-full text-xl font-bold text-red-500">
-          G
-        </span>
-        <span>{isSigningIn ? "Signing in..." : "Continue with Google"}</span>
-        <LogIn className="h-4 w-4" />
+        {isSigningIn ? (
+          <LoadingAnimation label="Connecting Google" variant="inline" />
+        ) : (
+          <>
+            <span className="inline-flex size-7 items-center justify-center rounded-full text-xl font-bold text-red-500">
+              G
+            </span>
+            <span>Continue with Google</span>
+            <LogIn className="h-4 w-4" />
+          </>
+        )}
       </button>
 
       {!enabled ? (

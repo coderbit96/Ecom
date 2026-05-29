@@ -6,6 +6,7 @@ import { useState } from "react";
 import { AlertTriangle, Eye, LogIn, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { LoadingAnimation } from "@/components/shared/loading-animation";
 
 type EmailAuthFormProps = {
   mode: "login" | "signup";
@@ -108,8 +109,14 @@ export function EmailAuthForm({ mode }: EmailAuthFormProps) {
         type="submit"
         disabled={pending}
       >
-        {isSignup ? <UserPlus className="size-4" /> : <LogIn className="size-4" />}
-        {pending ? "Please wait..." : isSignup ? "Sign Up" : "Sign In"}
+        {pending ? (
+          <LoadingAnimation label={isSignup ? "Creating account" : "Signing in"} variant="inline" />
+        ) : (
+          <>
+            {isSignup ? <UserPlus className="size-4" /> : <LogIn className="size-4" />}
+            {isSignup ? "Sign Up" : "Sign In"}
+          </>
+        )}
       </Button>
 
       <p className="text-center text-sm text-slate-400">

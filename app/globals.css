@@ -8,6 +8,42 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  .loading-pulse-dot {
+    animation: loading-pulse-dot 1.6s ease-out infinite;
+  }
+
+  .loading-bar {
+    animation: loading-bar 1.1s ease-in-out infinite;
+    transform-origin: center;
+  }
+}
+
+@keyframes loading-pulse-dot {
+  0% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(0.62);
+  }
+  70% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+}
+
+@keyframes loading-bar {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scaleY(0.45);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
 }
 
 @layer base {
